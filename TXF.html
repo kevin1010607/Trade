@@ -2,45 +2,204 @@
 <html>
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TXF</title>
     <style>
         body {
-            background-color: #dce7d9; /* 淡淡的綠色背景 */
+            background-color: #f0f7f4; /* 淡淡的綠色背景 */
             margin: 0;
             padding: 20px;
+            padding-top: 80px; /* 留空間給固定在頂部的導航列 */
+            font-family: "Microsoft JhengHei", "Helvetica Neue", Arial, sans-serif;
+        }
+        /* 固定在頂部的導航列 */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: #e2ede7;
+            padding: 12px 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            z-index: 1000;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .navbar label {
+            font-weight: bold;
+            font-size: 14px;
+        }
+        /* 下拉選單樣式 */
+        .navbar select {
+            padding: 6px;
+            font-size: 16px; /* 防止 iOS 點選時畫面被強制放大的行為 */
+            border: 1px solid #b2cfc0;
+            border-radius: 4px;
+            background-color: #fff;
+            max-width: 200px;
+        }
+        .navbar button {
+            padding: 6px 12px;
+            font-size: 16px;
+            background-color: #2e7d32;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .navbar button:hover {
+            background-color: #1b5e20;
+        }
+        .content-wrapper {
+            width: 100%;
+            max-width: 100%;
+            margin: 0 auto;
         }
         h2 {
-            font-size: 2.5em;     /* 保持大字體 */
-            font-weight: bold;  /* 保持加粗 */
+            font-size: 2em;
+            font-weight: bold;
+            margin-top: 10px;
+            scroll-margin-top: 90px; /* 讓畫面跳轉後，標題不會被導航列擋住 */
         }
         img {
-            width: 100%;       /* 100% 滿版 */
+            width: 100%;
             height: auto;
             display: block;
         }
         hr {
-            border: 1px solid #eee; /* 預設的淡灰色分隔線 */
+            border: 1px solid #eee;
             margin: 40px 0;
         }
     </style>
 </head>
 <body>
-    <h2>2021-06-25</h2>
-    <img src="./TXF/2021-06-25.png" alt="2021-06-25">
-    <hr>
-    <h2>2021-06-28</h2>
-    <img src="./TXF/2021-06-28.png" alt="2021-06-28">
-    <hr>
-    <h2>2021-06-29</h2>
-    <img src="./TXF/2021-06-29.png" alt="2021-06-29">
-    <hr>
-    <h2>2021-06-30</h2>
-    <img src="./TXF/2021-06-30.png" alt="2021-06-30">
-    <hr>
-    <h2>2021-07-01</h2>
-    <img src="./TXF/2021-07-01.png" alt="2021-07-01">
-    <hr>
-    <h2>2021-07-02</h2>
-    <img src="./TXF/2021-07-02.png" alt="2021-07-02">
+
+    <div class="navbar">
+        <label for="date-select">選擇交易日：</label>
+        <select id="date-select">
+            <option value="2021-07-30">2021-07-30</option>
+            <option value="2021-07-29">2021-07-29</option>
+            <option value="2021-07-28">2021-07-28</option>
+            <option value="2021-07-27">2021-07-27</option>
+            <option value="2021-07-26">2021-07-26</option>
+            <option value="2021-07-23">2021-07-23</option>
+            <option value="2021-07-22">2021-07-22</option>
+            <option value="2021-07-21">2021-07-21</option>
+            <option value="2021-07-20">2021-07-20</option>
+            <option value="2021-07-19">2021-07-19</option>
+            <option value="2021-07-16">2021-07-16</option>
+            <option value="2021-07-15">2021-07-15</option>
+            <option value="2021-07-14">2021-07-14</option>
+            <option value="2021-07-13">2021-07-13</option>
+            <option value="2021-07-12">2021-07-12</option>
+            <option value="2021-07-09">2021-07-09</option>
+            <option value="2021-07-08">2021-07-08</option>
+            <option value="2021-07-07">2021-07-07</option>
+            <option value="2021-07-06">2021-07-06</option>
+            <option value="2021-07-05">2021-07-05</option>
+            <option value="2021-07-02">2021-07-02</option>
+            <option value="2021-07-01">2021-07-01</option>
+            <option value="2021-06-30">2021-06-30</option>
+            <option value="2021-06-29">2021-06-29</option>
+            <option value="2021-06-28">2021-06-28</option>
+            <option value="2021-06-25">2021-06-25</option>
+        </select>
+        <button onclick="jumpToDate()">前往</button>
+    </div>
+
+    <div class="content-wrapper">
+        <h2 id="2021-06-25">2021-06-25</h2>
+        <img src="./TXF/2021-06-25.png" alt="2021-06-25">
+        <hr>
+        <h2 id="2021-06-28">2021-06-28</h2>
+        <img src="./TXF/2021-06-28.png" alt="2021-06-28">
+        <hr>
+        <h2 id="2021-06-29">2021-06-29</h2>
+        <img src="./TXF/2021-06-29.png" alt="2021-06-29">
+        <hr>
+        <h2 id="2021-06-30">2021-06-30</h2>
+        <img src="./TXF/2021-06-30.png" alt="2021-06-30">
+        <hr>
+        <h2 id="2021-07-01">2021-07-01</h2>
+        <img src="./TXF/2021-07-01.png" alt="2021-07-01">
+        <hr>
+        <h2 id="2021-07-02">2021-07-02</h2>
+        <img src="./TXF/2021-07-02.png" alt="2021-07-02">
+        <hr>
+        <h2 id="2021-07-05">2021-07-05</h2>
+        <img src="./TXF/2021-07-05.png" alt="2021-07-05">
+        <hr>
+        <h2 id="2021-07-06">2021-07-06</h2>
+        <img src="./TXF/2021-07-06.png" alt="2021-07-06">
+        <hr>
+        <h2 id="2021-07-07">2021-07-07</h2>
+        <img src="./TXF/2021-07-07.png" alt="2021-07-07">
+        <hr>
+        <h2 id="2021-07-08">2021-07-08</h2>
+        <img src="./TXF/2021-07-08.png" alt="2021-07-08">
+        <hr>
+        <h2 id="2021-07-09">2021-07-09</h2>
+        <img src="./TXF/2021-07-09.png" alt="2021-07-09">
+        <hr>
+        <h2 id="2021-07-12">2021-07-12</h2>
+        <img src="./TXF/2021-07-12.png" alt="2021-07-12">
+        <hr>
+        <h2 id="2021-07-13">2021-07-13</h2>
+        <img src="./TXF/2021-07-13.png" alt="2021-07-13">
+        <hr>
+        <h2 id="2021-07-14">2021-07-14</h2>
+        <img src="./TXF/2021-07-14.png" alt="2021-07-14">
+        <hr>
+        <h2 id="2021-07-15">2021-07-15</h2>
+        <img src="./TXF/2021-07-15.png" alt="2021-07-15">
+        <hr>
+        <h2 id="2021-07-16">2021-07-16</h2>
+        <img src="./TXF/2021-07-16.png" alt="2021-07-16">
+        <hr>
+        <h2 id="2021-07-19">2021-07-19</h2>
+        <img src="./TXF/2021-07-19.png" alt="2021-07-19">
+        <hr>
+        <h2 id="2021-07-20">2021-07-20</h2>
+        <img src="./TXF/2021-07-20.png" alt="2021-07-20">
+        <hr>
+        <h2 id="2021-07-21">2021-07-21</h2>
+        <img src="./TXF/2021-07-21.png" alt="2021-07-21">
+        <hr>
+        <h2 id="2021-07-22">2021-07-22</h2>
+        <img src="./TXF/2021-07-22.png" alt="2021-07-22">
+        <hr>
+        <h2 id="2021-07-23">2021-07-23</h2>
+        <img src="./TXF/2021-07-23.png" alt="2021-07-23">
+        <hr>
+        <h2 id="2021-07-26">2021-07-26</h2>
+        <img src="./TXF/2021-07-26.png" alt="2021-07-26">
+        <hr>
+        <h2 id="2021-07-27">2021-07-27</h2>
+        <img src="./TXF/2021-07-27.png" alt="2021-07-27">
+        <hr>
+        <h2 id="2021-07-28">2021-07-28</h2>
+        <img src="./TXF/2021-07-28.png" alt="2021-07-28">
+        <hr>
+        <h2 id="2021-07-29">2021-07-29</h2>
+        <img src="./TXF/2021-07-29.png" alt="2021-07-29">
+        <hr>
+        <h2 id="2021-07-30">2021-07-30</h2>
+        <img src="./TXF/2021-07-30.png" alt="2021-07-30">
+    </div>
+
+    <script>
+        function jumpToDate() {
+            const selectedDate = document.getElementById('date-select').value;
+            if (!selectedDate) return;
+            
+            const targetEl = document.getElementById(selectedDate);
+            if (targetEl) {
+                targetEl.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+    </script>
 </body>
 </html>
