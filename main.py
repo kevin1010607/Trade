@@ -164,7 +164,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </html>"""
 
 def main():
-    target_folders = ["TXF", "ES", "ES - 復盤", "ES - 實盤"]
+    target_folders = ["ES - 實盤", "ES - 復盤", "TXF - 實盤", "TXF - 復盤", "ES", "TXF"]
     all_data = {}
     folder_options_list = []
 
