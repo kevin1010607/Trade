@@ -1,215 +1,276 @@
-import os
-import json
+"""掃描各交易紀錄資料夾中的 PNG 圖片，生成單頁瀏覽網站 index.html。"""
 
-# 整合版 HTML 樣板：去按鈕、選單連動、加入微軟正黑體
+from __future__ import annotations
+
+import json
+import struct
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+OUTPUT = ROOT / "index.html"
+
+# 要放進網站的資料夾（依下拉選單順序）
+FOLDERS = ("ES - 實盤", "ES - 復盤", "TXF - 實盤", "TXF - 復盤")
+
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+DATA_PLACEHOLDER = "__TRADE_DATA__"
+
+
+def png_size(path: Path) -> tuple[int, int] | None:
+    """從 PNG 檔頭 (IHDR) 讀取寬高，讓網頁預留圖片空間、避免版面跳動。"""
+    with path.open("rb") as f:
+        header = f.read(24)
+    if len(header) < 24 or header[:8] != PNG_SIGNATURE or header[12:16] != b"IHDR":
+        return None
+    return struct.unpack(">II", header[16:24])
+
+
+def scan_folder(folder: Path) -> list[dict]:
+    """回傳資料夾內所有 PNG（依檔名排序，即日期由舊到新）。"""
+    entries = []
+    for image in sorted(folder.glob("*.png")):
+        entry: dict = {"name": image.stem}
+        if size := png_size(image):
+            entry["width"], entry["height"] = size
+        entries.append(entry)
+    return entries
+
+
+def to_json(data: dict[str, list[dict]]) -> str:
+    """每張圖一行，新增圖片時 git diff 只會多一行。"""
+    blocks = []
+    for folder, entries in data.items():
+        rows = ",\n".join(f"      {json.dumps(e, ensure_ascii=False)}" for e in entries)
+        blocks.append(f"    {json.dumps(folder, ensure_ascii=False)}: [\n{rows}\n    ]")
+    # 避免資料中出現 "</script>" 提前結束 script 區塊
+    return ("{\n" + ",\n".join(blocks) + "\n  }").replace("</", "<\\/")
+
+
+def main() -> int:
+    data: dict[str, list[dict]] = {}
+
+    for name in FOLDERS:
+        folder = ROOT / name
+        if not folder.is_dir():
+            print(f"略過：找不到資料夾「{name}」")
+            continue
+        entries = scan_folder(folder)
+        if not entries:
+            print(f"略過：「{name}」中沒有 .png 檔案")
+            continue
+        data[name] = entries
+        print(f"已載入「{name}」：{len(entries)} 張圖片")
+
+    if not data:
+        print("錯誤：沒有任何可用的圖片，未生成網頁。", file=sys.stderr)
+        return 1
+
+    html = HTML_TEMPLATE.replace(DATA_PLACEHOLDER, to_json(data))
+    OUTPUT.write_text(html, encoding="utf-8")
+    print(f"完成：已生成 {OUTPUT.relative_to(ROOT)}")
+    return 0
+
+
 HTML_TEMPLATE = """<!DOCTYPE html>
-<html>
+<html lang="zh-Hant">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trade</title>
-    <style>
-        body {{
-            font-family: "Microsoft JhengHei", "Helvetica Neue", Arial, sans-serif;
-            background-color: #f0f7f4;
-            margin: 0;
-            padding: 20px;
-            padding-top: 80px;
-        }}
-        .navbar {{
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            background-color: #e2ede7;
-            padding: 12px 20px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            z-index: 1000;
-            box-sizing: border-box;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            flex-wrap: wrap;
-        }}
-        .nav-group {{
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }}
-        .navbar label {{
-            font-weight: bold;
-            font-size: 14px;
-        }}
-        .navbar select {{
-            padding: 6px;
-            font-size: 16px;
-            border: 1px solid #b2cfc0;
-            border-radius: 4px;
-            background-color: #fff;
-            min-width: 120px;
-        }}
-        .content-wrapper {{
-            width: 100%;
-            max-width: 100%;
-            margin: 0 auto;
-        }}
-        h2 {{
-            font-size: 2em;
-            font-weight: bold;
-            margin-top: 10px;
-            scroll-margin-top: 90px;
-        }}
-        img {{
-            width: 100%;
-            height: auto;
-            display: block;
-        }}
-        hr {{
-            border: 1px solid #eee;
-            margin: 40px 0;
-        }}
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trade</title>
+  <style>
+    :root {
+      --bg: #f0f7f4;
+      --nav-bg: #e2ede7;
+      --border: #b2cfc0;
+      --divider: #eee;
+      --header-offset: 80px; /* 由 JS 依導覽列實際高度更新 */
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html { scroll-padding-top: var(--header-offset); }
+
+    body {
+      margin: 0;
+      font-family: "Microsoft JhengHei", "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg);
+    }
+
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 15px;
+      padding: 12px 20px;
+      background-color: var(--nav-bg);
+      box-shadow: 0 2px 5px rgb(0 0 0 / 10%);
+    }
+
+    .nav-group {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .nav-group label {
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .nav-group select {
+      min-width: 120px;
+      padding: 6px;
+      font: inherit;
+      font-size: 16px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background-color: #fff;
+    }
+
+    main { padding: 0 20px 20px; }
+
+    .entry h2 {
+      margin: 10px 0 0.83em;
+      font-size: 2em;
+    }
+
+    .entry img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    hr {
+      margin: 40px 0;
+      border: 1px solid var(--divider);
+    }
+  </style>
 </head>
 <body>
-
-    <div class="navbar">
-        <div class="nav-group">
-            <label for="folder-select">商品：</label>
-            <select id="folder-select" onchange="onFolderChange()">
-{folder_options}
-            </select>
-        </div>
-        <div class="nav-group">
-            <label for="date-select">交易日：</label>
-            <select id="date-select" onchange="jumpToDate()">
-                </select>
-        </div>
+  <header class="navbar">
+    <div class="nav-group">
+      <label for="folder-select">商品：</label>
+      <select id="folder-select"></select>
     </div>
+    <div class="nav-group">
+      <label for="date-select">交易日：</label>
+      <select id="date-select"></select>
+    </div>
+  </header>
 
-    <div class="content-wrapper" id="content-area">
-        </div>
+  <main id="content"></main>
 
-    <script>
-        const db = {data_json};
+  <script type="application/json" id="trade-data">
+  __TRADE_DATA__
+  </script>
 
-        function onFolderChange() {{
-            const folderSelect = document.getElementById('folder-select');
-            const dateSelect = document.getElementById('date-select');
-            const contentArea = document.getElementById('content-wrapper') || document.getElementById('content-area');
-            
-            const selectedFolder = folderSelect.value;
-            const folderData = db[selectedFolder] || [];
-            
-            // 1. 更新日期下拉選單 (最新日期排最上面)
-            dateSelect.innerHTML = '';
-            for (let i = folderData.length - 1; i >= 0; i--) {{
-                const dateStr = folderData[i];
-                const option = document.createElement('option');
-                option.value = dateStr;
-                option.textContent = dateStr;
-                dateSelect.appendChild(option);
-            }}
-            
-            // 2. 更新下方圖片主體內容
-            let bodyHtml = '';
-            for (let i = 0; i < folderData.length; i++) {{
-                const dateStr = folderData[i];
-                bodyHtml += `    <h2 id="${{dateStr}}">${{dateStr}}</h2>\\n`;
-                bodyHtml += `    <img src="./${{selectedFolder}}/${{dateStr}}.png" alt="${{dateStr}}">\\n`;
-                
-                if (i < folderData.length - 1) {{
-                    bodyHtml += '    <hr>\\n';
-                }}
-            }}
-            contentArea.innerHTML = bodyHtml;
-            
-            // 3. 預設選取最新日期，並確認圖片載入完成後精準定位
-            if (folderData.length > 0) {{
-                const newestDate = folderData[folderData.length - 1];
-                dateSelect.value = newestDate;
-                
-                // 尋找最後一張圖片（最新日期）
-                const newestImg = document.querySelector(`img[alt="${{newestDate}}"]`);
-                if (newestImg) {{
-                    if (newestImg.complete) {{
-                        jumpToDate();
-                    }} else {{
-                        newestImg.onload = function() {{
-                            jumpToDate();
-                        }};
-                    }}
-                }} else {{
-                    jumpToDate();
-                }}
-            }} else {{
-                window.scrollTo(0, 0);
-            }}
-        }}
+  <script>
+    "use strict";
 
-        function jumpToDate() {{
-            const selectedDate = document.getElementById('date-select').value;
-            if (!selectedDate) return;
-            
-            const targetEl = document.getElementById(selectedDate);
-            if (targetEl) {{
-                targetEl.scrollIntoView({{ behavior: 'smooth' }});
-            }}
-        }}
+    const data = JSON.parse(document.getElementById("trade-data").textContent);
+    const header = document.querySelector(".navbar");
+    const folderSelect = document.getElementById("folder-select");
+    const dateSelect = document.getElementById("date-select");
+    const content = document.getElementById("content");
+    const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
-        window.onload = function() {{
-            onFolderChange();
-        }};
-    </script>
+    /** 目前商品中「檔名 -> section 元素」的對照 */
+    let sections = new Map();
+
+    // 導覽列高度會因換行而改變，同步給 scroll-padding-top
+    const syncHeaderOffset = () =>
+      document.documentElement.style.setProperty("--header-offset", `${header.offsetHeight + 20}px`);
+    syncHeaderOffset();
+    new ResizeObserver(syncHeaderOffset).observe(header);
+
+    // 目前選擇記在網址 hash，重新整理或分享連結時可回到同一張
+    const readHash = () => Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
+    const writeHash = (folder, date) =>
+      history.replaceState(null, "", `#${new URLSearchParams({ folder, date })}`);
+
+    const imageUrl = (folder, name) =>
+      `${encodeURIComponent(folder)}/${encodeURIComponent(name)}.png`;
+
+    function renderFolder(folder) {
+      const entries = data[folder] ?? [];
+      const fragment = document.createDocumentFragment();
+      sections = new Map();
+
+      entries.forEach(({ name, width, height }, i) => {
+        if (i > 0) fragment.append(document.createElement("hr"));
+
+        const section = document.createElement("section");
+        section.className = "entry";
+
+        const title = document.createElement("h2");
+        title.textContent = name;
+
+        const img = document.createElement("img");
+        img.loading = "lazy"; // 須在設定 src 之前
+        img.decoding = "async";
+        img.alt = name;
+        if (width && height) {
+          img.width = width;
+          img.height = height;
+        }
+        img.src = imageUrl(folder, name);
+
+        section.append(title, img);
+        fragment.append(section);
+        sections.set(name, section);
+      });
+
+      content.replaceChildren(fragment);
+
+      // 日期選單：最新的排最上面
+      dateSelect.replaceChildren(
+        ...[...entries].reverse().map(({ name }) => new Option(name, name))
+      );
+    }
+
+    function scrollToDate(date, { smooth = false } = {}) {
+      sections.get(date)?.scrollIntoView({
+        behavior: smooth && !reduceMotion.matches ? "smooth" : "auto",
+      });
+    }
+
+    function selectFolder(folder, date) {
+      folderSelect.value = folder;
+      renderFolder(folder);
+
+      const target = sections.has(date) ? date : dateSelect.options[0]?.value;
+      if (!target) {
+        scrollTo(0, 0);
+        return;
+      }
+      dateSelect.value = target;
+      writeHash(folder, target);
+      scrollToDate(target);
+    }
+
+    folderSelect.replaceChildren(...Object.keys(data).map((name) => new Option(name, name)));
+
+    folderSelect.addEventListener("change", () => selectFolder(folderSelect.value));
+    dateSelect.addEventListener("change", () => {
+      writeHash(folderSelect.value, dateSelect.value);
+      scrollToDate(dateSelect.value, { smooth: true });
+    });
+
+    history.scrollRestoration = "manual";
+    const initial = readHash();
+    selectFolder(
+      Object.hasOwn(data, initial.folder ?? "") ? initial.folder : Object.keys(data)[0],
+      initial.date
+    );
+  </script>
 </body>
-</html>"""
+</html>
+"""
 
-def main():
-    target_folders = ["ES - 實盤", "ES - 復盤", "TXF - 實盤", "TXF - 復盤", "ES", "TXF"]
-    all_data = {}
-    folder_options_list = []
-
-    print("開始讀取資料夾圖片...")
-    
-    for folder in target_folders:
-        folder_path = f"./{folder}"
-        
-        if not os.path.exists(folder_path) or not os.path.isdir(folder_path):
-            print(f"提示：未找到資料夾 '{folder_path}'，跳過。")
-            continue
-            
-        try:
-            files = [f for f in os.listdir(folder_path) if f.lower().endswith('.png')]
-            files.sort()
-            
-            dates = [os.path.splitext(f)[0] for f in files]
-            
-            if dates:
-                all_data[folder] = dates
-                folder_options_list.append(f'            <option value="{folder}">{folder}</option>')
-                print(f"-> 已載入 {folder} 資料夾 (共 {len(dates)} 張圖片)")
-            else:
-                print(f"提示：'{folder_path}' 中沒有任何 .png 檔案。")
-                
-        except Exception as e:
-            print(f"讀取資料夾 {folder} 失敗: {e}")
-
-    if not all_data:
-        print("錯誤：沒有載入任何有效的商品資料夾與圖片，停止生成。")
-        return
-
-    folder_options = "\n".join(folder_options_list)
-    data_json = json.dumps(all_data, ensure_ascii=False)
-
-    final_html = HTML_TEMPLATE.format(
-        folder_options=folder_options,
-        data_json=data_json
-    )
-    
-    output_path = "./index.html"
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(final_html)
-
-    print(f"\n全部處理完成！已成功生成直覺跳轉網頁：{output_path}")
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
